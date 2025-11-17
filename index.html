@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>Prize Wheel</title>
+
+  <!-- Google Font: Montserrat -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+
   <style>
     * {
       box-sizing: border-box;
@@ -11,7 +15,7 @@
     html, body {
       margin: 0;
       height: 100%;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Montserrat", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f5f5f9;
     }
 
@@ -46,13 +50,25 @@
       position: relative;
       width: min(80vmin, 700px);
       height: min(80vmin, 700px);
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.22);
+      transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), transparent 60%);
+    }
+
+    .wheel-wrapper.spin-anim {
+      transform: scale(1.03);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.30);
     }
 
     canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* no border-radius here */
+}
+
 
     #wheelCanvas {
       position: relative;
@@ -67,64 +83,28 @@
       width: 100vw;
       height: 100vh;
       pointer-events: none;
-      z-index: 999;
+      z-index: 900;
     }
 
     .pointer {
       position: absolute;
       top: 50%;
-      right: -30px;
+      right: -6px; /* close to wheel */
       transform: translateY(-50%);
       width: 0;
       height: 0;
       border-top: 18px solid transparent;
       border-bottom: 18px solid transparent;
-      /* arrow points LEFT into the wheel */
-      border-right: 30px solid #333;
+      border-right: 28px solid #333; /* arrow points left */
       border-left: 0;
       z-index: 3;
-    }
-
-    .controls-overlay {
-      position: absolute;
-      bottom: 5%;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-      pointer-events: auto;
-      z-index: 3;
-    }
-
-    .controls-overlay button {
-      padding: 10px 24px;
-      font-size: 1rem;
-      border-radius: 999px;
-      border: none;
-      cursor: pointer;
-      background: #111;
-      color: #fff;
-    }
-
-    .controls-overlay button:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-
-    #result {
-      margin-top: 10px;
-      font-size: 0.95rem;
-      color: #111;
-    }
-
-    #result a {
-      text-decoration: underline;
-      color: inherit;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
     }
 
     .panel {
-      width: 360px;
+      width: 380px;
       max-width: 40%;
-      background: rgba(255,255,255,0.95);
+      background: rgba(255,255,255,0.97);
       border-radius: 16px;
       padding: 16px 18px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.08);
@@ -132,6 +112,9 @@
       flex-direction: column;
       gap: 12px;
       z-index: 2;
+      backdrop-filter: blur(6px);
+      max-height: 100vh;
+      overflow: auto;
     }
 
     .panel h2 {
@@ -151,15 +134,24 @@
       display: block;
     }
 
-    textarea {
+    input[type="text"],
+    input[type="url"] {
       width: 100%;
-      min-height: 150px;
-      resize: vertical;
-      font-family: inherit;
       font-size: 0.8rem;
-      padding: 6px;
+      padding: 6px 8px;
       border-radius: 8px;
       border: 1px solid #ccc;
+      font-family: inherit;
+    }
+
+    input[type="color"] {
+      width: 60px;
+      height: 28px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid #ccc;
+      background: transparent;
+      cursor: pointer;
     }
 
     input[type="file"] {
@@ -173,15 +165,20 @@
       border-radius: 999px;
       border: none;
       cursor: pointer;
-      background: #222;
+      background: #111;
       color: #fff;
       align-self: flex-start;
+      letter-spacing: 0.02em;
+    }
+
+    .panel button:hover {
+      opacity: 0.9;
     }
 
     .panel-row {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
 
     .panel .btn-row {
@@ -191,8 +188,176 @@
       margin-top: 4px;
     }
 
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .toggle-row input {
+      width: auto;
+    }
+
+    .sectors-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .sector-card {
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sector-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .sector-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+    }
+
+    .sector-color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,0.2);
+      background: #ccc;
+    }
+
+    .sector-delete {
+      background: transparent;
+      color: #777;
+      font-size: 0.9rem;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+
+    .sector-delete[disabled] {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .sector-delete:hover:not([disabled]) {
+      color: #000;
+    }
+
+    .sector-row-inline {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .sector-row-inline > div {
+      flex: 1;
+    }
+
+    .sector-image-preview {
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      flex-shrink: 0;
+    }
+
+    .sector-image-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .hidden {
       display: none !important;
+    }
+
+    /* Result modal */
+    .result-modal {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .result-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+    }
+
+    .result-modal__content {
+      position: relative;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 20px 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      max-width: 320px;
+      text-align: center;
+      z-index: 1;
+      transform: translateY(10px) scale(0.96);
+      opacity: 0;
+      animation: popup-in 0.25s ease-out forwards;
+    }
+
+    .result-modal__content h3 {
+      margin: 0 0 8px;
+      font-size: 1.1rem;
+    }
+
+    .result-modal__content p {
+      margin: 0 0 12px;
+      font-size: 0.95rem;
+    }
+
+    .result-modal__content a {
+      display: inline-block;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      text-decoration: underline;
+      color: #111;
+      word-break: break-all;
+    }
+
+    .result-modal__content button {
+      padding: 8px 18px;
+      border-radius: 999px;
+      border: none;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+    }
+
+    .result-modal__content button:hover {
+      opacity: 0.9;
+    }
+
+    @keyframes popup-in {
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
     @media (max-width: 900px) {
@@ -205,38 +370,47 @@
         order: -1;
       }
       .wheel-wrapper {
-        width: min(90vmin, 600px);
-        height: min(90vmin, 600px);
-      }
+  position: relative;
+  width: min(80vmin, 700px);
+  height: min(80vmin, 700px);
+  cursor: pointer;
+  border-radius: 50%;
+  overflow: visible;            /* add this */
+  box-shadow: 0 18px 45px rgba(0,0,0,0.22);
+  transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), transparent 60%);
+}
+
     }
   </style>
 </head>
 <body>
 <div class="app">
   <div class="wheel-area" id="wheelArea">
-    <div class="wheel-wrapper">
-      <!-- high-res wheel -->
-      <canvas id="wheelCanvas" width="1000" height="1000"></canvas>
+    <div class="wheel-wrapper" id="wheelWrapper">
+      <!-- increased canvas size to give room for pop-out images -->
+      <canvas id="wheelCanvas" width="1200" height="1200"></canvas>
       <div class="pointer"></div>
-      <div class="controls-overlay">
-        <button id="spinBtn">Spin</button>
-        <div id="result"></div>
-      </div>
     </div>
   </div>
 
   <div class="panel" id="settingsPanel">
     <div class="panel-row">
-      <h2>Wheel settings</h2>
-      <small>Format: <strong>Label | https://link.com | #color</strong><br>
-        Color is optional, hex or CSS color names work. One entry per line.</small>
+      <h2>Prize wheel</h2>
+      <small>Click the wheel to spin. Configure each sector below.</small>
     </div>
 
     <div class="panel-row">
-      <label for="entriesInput">Entries</label>
-      <textarea id="entriesInput"></textarea>
+      <label class="toggle-row">
+        <input type="checkbox" id="showImagesToggle" checked>
+        Show prize images on sectors
+      </label>
+    </div>
+
+    <div class="panel-row">
+      <div class="sectors-container" id="sectorsContainer"></div>
       <div class="btn-row">
-        <button id="applyEntriesBtn">Apply entries</button>
+        <button id="addSectorBtn">+ Add sector</button>
       </div>
     </div>
 
@@ -263,62 +437,83 @@
       <button id="fullscreenBtn">Fullscreen</button>
     </div>
   </div>
+
+  <!-- CONFETTI & RESULT MODAL INSIDE .app (so they show in fullscreen) -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <div id="resultModal" class="result-modal hidden">
+    <div id="resultBackdrop" class="result-modal__backdrop"></div>
+    <div class="result-modal__content">
+      <h3 id="resultTitle">You got:</h3>
+      <p id="resultText"></p>
+      <a id="resultLink" href="#" target="_blank" rel="noopener noreferrer">Open prize page</a><br>
+      <button id="resultClose">OK</button>
+    </div>
+  </div>
 </div>
 
-<!-- CONFETTI CANVAS FULLSCREEN OVERLAY -->
-<canvas id="confettiCanvas"></canvas>
-
 <script>
-  // ====== INITIAL CONFIG ======
-  const defaultEntries = [
-    "Blum hardware pack | https://example.com/blum | #ff4b4b",
-    "Hinge upgrade | https://example.com/hinges | #ffb347",
-    "Lighting pack | https://example.com/lighting | #ffe66d",
-    "Worktop voucher | https://example.com/worktop | #7bd389",
-    "Kitchen consult | https://example.com/consult | #4f98ca",
-    "Accessory set | https://example.com/accessories | #b084f4",
-    "Mystery prize | https://example.com/mystery | #ff6fb5"
-  ].join("\n");
+  const FONT_SPEC = "600 26px 'Montserrat', system-ui";
+
+  const defaultSegmentsData = [
+    { label: "Blum hardware pack", url: "https://example.com/blum",  color: "#ff4b4b" },
+    { label: "Hinge upgrade",      url: "https://example.com/hinges",color: "#ffb347" },
+    { label: "Lighting pack",      url: "https://example.com/lighting", color: "#ffe66d" },
+    { label: "Worktop voucher",    url: "https://example.com/worktop", color: "#7bd389" },
+    { label: "Kitchen consult",    url: "https://example.com/consult", color: "#4f98ca" },
+    { label: "Accessory set",      url: "https://example.com/accessories", color: "#b084f4" },
+    { label: "Mystery prize",      url: "https://example.com/mystery", color: "#ff6fb5" }
+  ];
 
   const colorPalette = [
     "#ff4b4b", "#ffb347", "#ffe66d", "#7bd389",
     "#4f98ca", "#b084f4", "#ff6fb5", "#ffa3a3"
   ];
 
-  let segments = [];
+  // state
+  let segments = []; // {label,url,color,imageDataUrl,imageObj}
+  let showImages = true;
   let logoImg = null;
   let logoDataUrl = null;
   let bgDataUrl = null;
 
-  const canvas   = document.getElementById('wheelCanvas');
-  const ctx      = canvas.getContext('2d');
+  const canvas   = document.getElementById("wheelCanvas");
+  const ctx      = canvas.getContext("2d");
 
-  const confettiCanvas = document.getElementById('confettiCanvas');
-  const confettiCtx    = confettiCanvas.getContext('2d');
+  const confettiCanvas = document.getElementById("confettiCanvas");
+  const confettiCtx    = confettiCanvas.getContext("2d");
 
-  const spinBtn  = document.getElementById('spinBtn');
-  const resultEl = document.getElementById('result');
-  const entriesInput = document.getElementById('entriesInput');
-  const applyEntriesBtn = document.getElementById('applyEntriesBtn');
-  const logoInput = document.getElementById('logoInput');
-  const bgInput = document.getElementById('bgInput');
-  const fullscreenBtn = document.getElementById('fullscreenBtn');
-  const settingsPanel = document.getElementById('settingsPanel');
-  const appEl = document.querySelector('.app');
+  const appEl          = document.querySelector(".app");
+  const wheelWrapper   = document.getElementById("wheelWrapper");
+  const settingsPanel  = document.getElementById("settingsPanel");
 
-  const exportBtn = document.getElementById('exportBtn');
-  const importBtn = document.getElementById('importBtn');
-  const importInput = document.getElementById('importInput');
+  const sectorsContainer = document.getElementById("sectorsContainer");
+  const addSectorBtn     = document.getElementById("addSectorBtn");
+  const showImagesToggle = document.getElementById("showImagesToggle");
+  const logoInput        = document.getElementById("logoInput");
+  const bgInput          = document.getElementById("bgInput");
+  const exportBtn        = document.getElementById("exportBtn");
+  const importBtn        = document.getElementById("importBtn");
+  const importInput      = document.getElementById("importInput");
+  const fullscreenBtn    = document.getElementById("fullscreenBtn");
+
+  const resultModal     = document.getElementById("resultModal");
+  const resultBackdrop  = document.getElementById("resultBackdrop");
+  const resultTitleEl   = document.getElementById("resultTitle");
+  const resultTextEl    = document.getElementById("resultText");
+  const resultLinkEl    = document.getElementById("resultLink");
+  const resultCloseBtn  = document.getElementById("resultClose");
 
   let centerX = canvas.width / 2;
   let centerY = canvas.height / 2;
-  let radius  = canvas.width / 2 - 10;
+  // smaller radius, leaving margin for pop-out PNGs
+  let radius  = canvas.width / 2 - 10; // instead of -80
+
 
   let sliceAngle = 0;
-  let currentRotation = 0; // radians
+  let currentRotation = 0;
   let isSpinning = false;
 
-  // ====== CONFETTI STATE ======
   let confettiParticles = [];
 
   function resizeConfettiCanvas() {
@@ -326,52 +521,233 @@
     confettiCanvas.height = window.innerHeight;
   }
 
-  window.addEventListener('resize', resizeConfettiCanvas);
-  document.addEventListener('fullscreenchange', resizeConfettiCanvas);
+  window.addEventListener("resize", resizeConfettiCanvas);
+  document.addEventListener("fullscreenchange", resizeConfettiCanvas);
 
-  // ====== SEGMENTS / ENTRIES ======
-  function parseEntries(text) {
-    const lines = text.split("\n")
-      .map(l => l.trim())
-      .filter(Boolean);
+  // ===== Contrast-based text color =====
+  const textColorCache = new Map();
 
-    const newSegments = [];
+  function getReadableTextColor(bgColor) {
+    if (textColorCache.has(bgColor)) return textColorCache.get(bgColor);
 
-    lines.forEach((line, index) => {
-      const parts = line.split("|").map(p => p.trim());
-      const label = parts[0] || `Choice ${index + 1}`;
-      const url   = parts[1] || "#";
-      const color = parts[2] || colorPalette[index % colorPalette.length];
+    let probe = getReadableTextColor._probe;
+    if (!probe) {
+      probe = document.createElement("span");
+      probe.style.display = "none";
+      document.body.appendChild(probe);
+      getReadableTextColor._probe = probe;
+    }
 
-      newSegments.push({ label, url, color });
+    try {
+      probe.style.color = bgColor;
+      const cs = getComputedStyle(probe).color;
+      const m = cs.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+      if (!m) throw new Error("Cannot parse color");
+
+      const r = parseInt(m[1], 10) / 255;
+      const g = parseInt(m[2], 10) / 255;
+      const b = parseInt(m[3], 10) / 255;
+
+      const RsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+      const GsRGB = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+      const BsRGB = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+
+      const L = 0.2126 * RsRGB + 0.7152 * GsRGB + 0.0722 * BsRGB;
+      const textColor = L > 0.6 ? "#000000" : "#ffffff";
+
+      textColorCache.set(bgColor, textColor);
+      return textColor;
+    } catch {
+      return "#000000";
+    }
+  }
+
+  // ===== Sector management & UI =====
+  function ensureSliceAngle() {
+    sliceAngle = segments.length ? (2 * Math.PI) / segments.length : 0;
+  }
+
+  function addSector(initial) {
+    const idx = segments.length;
+    const base = initial || {};
+    segments.push({
+      label: base.label || `Prize ${idx + 1}`,
+      url: base.url || "#",
+      color: base.color || colorPalette[idx % colorPalette.length],
+      imageDataUrl: base.imageDataUrl || null,
+      imageObj: base.imageObj || null
     });
-
-    return newSegments;
-  }
-
-  function applyEntries() {
-    const newSegs = parseEntries(entriesInput.value);
-    if (!newSegs.length) return;
-
-    segments = newSegs;
-    sliceAngle = (2 * Math.PI) / segments.length;
-    currentRotation = 0;
+    ensureSliceAngle();
+    renderSectorsPanel();
     drawWheel(currentRotation);
-    resultEl.textContent = "";
   }
 
-  // ====== DRAWING WHEEL ======
+  function removeSector(index) {
+    if (segments.length <= 1) return; // keep at least 1 sector
+    segments.splice(index, 1);
+    ensureSliceAngle();
+    renderSectorsPanel();
+    drawWheel(currentRotation);
+  }
+
+  function renderSectorsPanel() {
+    sectorsContainer.innerHTML = "";
+    segments.forEach((seg, i) => {
+      const card = document.createElement("div");
+      card.className = "sector-card";
+      card.dataset.index = i.toString();
+
+      card.innerHTML = `
+        <div class="sector-header">
+          <div class="sector-badge">
+            <span>Sector ${i + 1}</span>
+            <span class="sector-color-dot" style="background:${seg.color};"></span>
+          </div>
+          <button type="button" class="sector-delete"${segments.length <= 1 ? " disabled" : ""} title="Remove sector">
+            ✕
+          </button>
+        </div>
+
+        <div>
+          <label>Label</label>
+          <input type="text" class="sector-label" value="${seg.label.replace(/"/g, "&quot;")}" />
+        </div>
+
+        <div>
+          <label>Link</label>
+          <input type="url" class="sector-url" value="${seg.url.replace(/"/g, "&quot;")}" />
+        </div>
+
+        <div class="sector-row-inline">
+          <div>
+            <label>Color</label>
+            <input type="color" class="sector-color" value="${seg.color}" />
+          </div>
+          <div class="sector-image-wrapper">
+            <div class="sector-image-preview" style="background-image:${seg.imageDataUrl ? `url(${seg.imageDataUrl})` : "none"}"></div>
+            <div style="flex:1;">
+              <label style="font-weight:500;">Image (PNG)</label>
+              <input type="file" class="sector-image" accept="image/*">
+            </div>
+          </div>
+        </div>
+      `;
+
+      sectorsContainer.appendChild(card);
+    });
+  }
+
+  sectorsContainer.addEventListener("input", (e) => {
+    const target = e.target;
+    const card = target.closest(".sector-card");
+    if (!card) return;
+    const index = parseInt(card.dataset.index, 10);
+    const seg = segments[index];
+    if (!seg) return;
+
+    if (target.classList.contains("sector-label")) {
+      seg.label = target.value || `Prize ${index + 1}`;
+    } else if (target.classList.contains("sector-url")) {
+      seg.url = target.value || "#";
+    } else if (target.classList.contains("sector-color")) {
+      seg.color = target.value || seg.color;
+    }
+    const dot = card.querySelector(".sector-color-dot");
+    if (dot) dot.style.background = seg.color;
+
+    drawWheel(currentRotation);
+  });
+
+  // image loading – PNG, no clipping
+  sectorsContainer.addEventListener("change", (e) => {
+    const target = e.target;
+    if (!target.classList.contains("sector-image")) return;
+
+    const card = target.closest(".sector-card");
+    if (!card) return;
+    const index = parseInt(card.dataset.index, 10);
+    const seg = segments[index];
+    if (!seg) return;
+
+    const preview = card.querySelector(".sector-image-preview");
+
+    const file = target.files[0];
+    if (!file) {
+      seg.imageDataUrl = null;
+      seg.imageObj = null;
+      if (preview) preview.style.backgroundImage = "none";
+      drawWheel(currentRotation);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const img = new Image();
+      img.onload = () => {
+        seg.imageDataUrl = dataUrl;
+        seg.imageObj = img;
+        if (preview) preview.style.backgroundImage = `url(${dataUrl})`;
+        drawWheel(currentRotation);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  sectorsContainer.addEventListener("click", (e) => {
+    const target = e.target;
+    if (target.classList.contains("sector-delete") && !target.disabled) {
+      const card = target.closest(".sector-card");
+      if (!card) return;
+      const index = parseInt(card.dataset.index, 10);
+      removeSector(index);
+    }
+  });
+
+  addSectorBtn.addEventListener("click", () => {
+    addSector();
+  });
+
+  showImagesToggle.addEventListener("change", () => {
+    showImages = showImagesToggle.checked;
+    drawWheel(currentRotation);
+  });
+
+  // ===== Modal =====
+  function hideResultModal() {
+    resultModal.classList.add("hidden");
+  }
+
+  function showResultModal() {
+    const content = resultModal.querySelector(".result-modal__content");
+    content.style.animation = "none";
+    void content.offsetWidth;
+    content.style.animation = "";
+    resultModal.classList.remove("hidden");
+  }
+
+  resultCloseBtn.addEventListener("click", hideResultModal);
+  resultBackdrop.addEventListener("click", hideResultModal);
+
+  // ===== Drawing wheel =====
   function drawWheel(rotation) {
-    if (!segments.length) return;
+    if (!segments.length) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     ctx.save();
     ctx.translate(centerX, centerY);
+
+    const centerRadius = radius * 0.18; // a bit smaller, so text rarely collides
+    const textRadius = radius - 70;     // text placed more inward
 
     segments.forEach((segment, index) => {
       const startAngle = rotation + index * sliceAngle;
       const endAngle   = startAngle + sliceAngle;
+      const midAngle   = startAngle + sliceAngle / 2;
 
       // Slice
       ctx.beginPath();
@@ -381,19 +757,50 @@
       ctx.fillStyle = segment.color;
       ctx.fill();
 
-      // Text
+      // Text, auto-shrink if too long (so it doesn't hit the center logo)
       ctx.save();
-      const textAngle = startAngle + sliceAngle / 2;
-      ctx.rotate(textAngle);
+      ctx.rotate(midAngle);
       ctx.textAlign = "right";
-      ctx.fillStyle = "#000";
-      ctx.font = "bold 26px system-ui";
-      ctx.fillText(segment.label, radius - 40, 10);
+      const readable = getReadableTextColor(segment.color);
+
+      let baseFontSize = 26;
+      ctx.font = `600 ${baseFontSize}px 'Montserrat', system-ui`;
+      let textWidth = ctx.measureText(segment.label).width;
+      const maxWidth = textRadius - (centerRadius + 30); // safe distance from center
+
+      if (maxWidth > 0 && textWidth > maxWidth) {
+        const scale = maxWidth / textWidth;
+        let newSize = Math.floor(baseFontSize * scale);
+        newSize = Math.max(14, newSize); // don't go too tiny
+        ctx.font = `600 ${newSize}px 'Montserrat', system-ui`;
+      }
+
+      ctx.fillStyle = readable;
+      ctx.fillText(segment.label, textRadius, 10);
       ctx.restore();
+
+      // Prize image PNG – no border, no clipping, slightly popping out
+      if (showImages && segment.imageObj) {
+        // Scale with radius, but clamp to avoid huge sprites
+        const size = Math.min(radius * 0.22, 160);       // square size
+        const imgRadius = radius + size * 0.15;          // center slightly outside wheel edge
+
+        const x = Math.cos(midAngle) * imgRadius;
+        const y = Math.sin(midAngle) * imgRadius;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.shadowColor = "rgba(0,0,0,0.35)";
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 4;
+
+        ctx.drawImage(segment.imageObj, -size/2, -size/2, size, size);
+
+        ctx.restore();
+      }
     });
 
-    // Center circle + optional logo
-    const centerRadius = radius * 0.20; // smaller so it doesn't touch the text
+    // Center circle + logo
     ctx.beginPath();
     ctx.arc(0, 0, centerRadius, 0, 2 * Math.PI);
     ctx.fillStyle = "#ffffff";
@@ -408,22 +815,21 @@
 
       const size = (centerRadius - 6) * 2;
       ctx.drawImage(logoImg, -size/2, -size/2, size, size);
-
       ctx.restore();
     }
 
     ctx.restore();
   }
 
-  // ====== SPIN LOGIC ======
+  // ===== Spin logic =====
   function spin() {
     if (isSpinning || !segments.length) return;
 
     isSpinning = true;
-    spinBtn.disabled = true;
-    resultEl.textContent = "";
+    hideResultModal();
+    wheelWrapper.classList.add("spin-anim");
 
-    const spins = 4 + Math.random() * 3; // 4–7 turns
+    const spins = 4 + Math.random() * 3;
     const extraRotation = Math.random() * 2 * Math.PI;
     const startRotation = currentRotation;
     const targetRotation = startRotation + spins * 2 * Math.PI + extraRotation;
@@ -433,7 +839,7 @@
     function animate(now) {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
 
       currentRotation = startRotation + (targetRotation - startRotation) * eased;
       drawWheel(currentRotation);
@@ -442,11 +848,10 @@
         requestAnimationFrame(animate);
       } else {
         isSpinning = false;
-        spinBtn.disabled = false;
+        wheelWrapper.classList.remove("spin-anim");
         showWinner();
       }
     }
-
     requestAnimationFrame(animate);
   }
 
@@ -456,22 +861,23 @@
     let rot = currentRotation % (2 * Math.PI);
     if (rot < 0) rot += 2 * Math.PI;
 
-    // Pointer is at the RIGHT side (angle 0)
     const pointerAngleInWheel = (2 * Math.PI - rot) % (2 * Math.PI);
     let index = Math.floor(pointerAngleInWheel / sliceAngle);
     if (index === segments.length) index = 0;
 
     const segment = segments[index];
 
-    resultEl.innerHTML =
-      `You got <strong>${segment.label}</strong>. ` +
-      `<a href="${segment.url}" target="_blank" rel="noopener noreferrer">Open prize page</a>`;
+    resultTitleEl.textContent = "You got:";
+    resultTextEl.textContent = segment.label;
+    resultLinkEl.href = segment.url || "#";
 
-    // launch confetti on win 🎉
+    showResultModal();
     startConfetti();
   }
 
-  // ====== CONFETTI EFFECT (FULLSCREEN + FADE) ======
+  wheelWrapper.addEventListener("click", spin);
+
+  // ===== Confetti =====
   function startConfetti() {
     resizeConfettiCanvas();
     const width = confettiCanvas.width;
@@ -484,7 +890,7 @@
     for (let i = 0; i < count; i++) {
       confettiParticles.push({
         x: Math.random() * width,
-        y: Math.random() * -height, // start above
+        y: Math.random() * -height,
         r: 4 + Math.random() * 4,
         color: colors[Math.floor(Math.random() * colors.length)],
         vx: (Math.random() - 0.5) * 3,
@@ -494,13 +900,13 @@
       });
     }
 
-    const duration = 2000; // total animation ms
+    const duration = 2000;
     const start = performance.now();
 
     function frame(now) {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      const alpha = 1 - t; // fade out
+      const alpha = 1 - t;
 
       confettiCtx.clearRect(0, 0, width, height);
       confettiCtx.save();
@@ -511,7 +917,6 @@
         p.y += p.vy;
         p.vy += 0.05;
         p.rotation += p.vr;
-
         if (p.y - p.r > height + 20) return;
 
         confettiCtx.save();
@@ -530,12 +935,11 @@
         confettiCtx.clearRect(0, 0, width, height);
       }
     }
-
     requestAnimationFrame(frame);
   }
 
-  // ====== FILE HANDLERS (LOGO & BG) ======
-  logoInput.addEventListener('change', (e) => {
+  // ===== Logo & background uploads =====
+  logoInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) {
       logoImg = null;
@@ -556,7 +960,7 @@
     reader.readAsDataURL(file);
   });
 
-  bgInput.addEventListener('change', (e) => {
+  bgInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) {
       bgDataUrl = null;
@@ -571,10 +975,16 @@
     reader.readAsDataURL(file);
   });
 
-  // ====== EXPORT / IMPORT CONFIG ======
-  exportBtn.addEventListener('click', () => {
+  // ===== Export / import config =====
+  exportBtn.addEventListener("click", () => {
     const config = {
-      entries: entriesInput.value,
+      segments: segments.map(s => ({
+        label: s.label,
+        url: s.url,
+        color: s.color,
+        imageDataUrl: s.imageDataUrl || null
+      })),
+      showImages,
       logoDataUrl: logoDataUrl || null,
       backgroundDataUrl: bgDataUrl || null
     };
@@ -594,12 +1004,12 @@
     URL.revokeObjectURL(url);
   });
 
-  importBtn.addEventListener('click', () => {
-    importInput.value = ""; // reset
+  importBtn.addEventListener("click", () => {
+    importInput.value = "";
     importInput.click();
   });
 
-  importInput.addEventListener('change', (e) => {
+  importInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -613,13 +1023,39 @@
           return;
         }
 
-        // Entries
-        if (typeof data.entries === "string" && data.entries.trim().length) {
-          entriesInput.value = data.entries;
-          applyEntries();
+        if (Array.isArray(data.segments) && data.segments.length) {
+          segments = data.segments.map((s, i) => ({
+            label: s.label || `Prize ${i + 1}`,
+            url: s.url || "#",
+            color: s.color || colorPalette[i % colorPalette.length],
+            imageDataUrl: s.imageDataUrl || null,
+            imageObj: null
+          }));
+        } else if (typeof data.entries === "string" && data.entries.trim().length) {
+          const lines = data.entries.split("\n").map(l => l.trim()).filter(Boolean);
+          segments = lines.map((line, i) => {
+            const parts = line.split("|").map(p => p.trim());
+            return {
+              label: parts[0] || `Prize ${i + 1}`,
+              url: parts[1] || "#",
+              color: parts[2] || colorPalette[i % colorPalette.length],
+              imageDataUrl: null,
+              imageObj: null
+            };
+          });
         }
 
-        // Background
+        if (!segments.length) {
+          alert("Config has no segments.");
+          return;
+        }
+
+        showImages = data.showImages !== false;
+        showImagesToggle.checked = showImages;
+
+        ensureSliceAngle();
+        renderSectorsPanel();
+
         if (typeof data.backgroundDataUrl === "string" && data.backgroundDataUrl.startsWith("data:")) {
           bgDataUrl = data.backgroundDataUrl;
           appEl.style.backgroundImage = `url(${bgDataUrl})`;
@@ -628,7 +1064,6 @@
           appEl.style.backgroundImage = "";
         }
 
-        // Logo
         if (typeof data.logoDataUrl === "string" && data.logoDataUrl.startsWith("data:")) {
           logoDataUrl = data.logoDataUrl;
           const img = new Image();
@@ -642,6 +1077,19 @@
           logoImg = null;
           drawWheel(currentRotation);
         }
+
+        segments.forEach((s) => {
+          if (s.imageDataUrl) {
+            const img = new Image();
+            img.onload = () => {
+              s.imageObj = img;
+              drawWheel(currentRotation);
+            };
+            img.src = s.imageDataUrl;
+          }
+        });
+
+        drawWheel(currentRotation);
       } catch (err) {
         console.error(err);
         alert("Could not read config file.");
@@ -650,39 +1098,52 @@
     reader.readAsText(file);
   });
 
-  // ====== FULLSCREEN / HIDE SETTINGS ======
-  fullscreenBtn.addEventListener('click', () => {
+  // ===== Fullscreen =====
+  fullscreenBtn.addEventListener("click", () => {
     if (!document.fullscreenElement) {
-      settingsPanel.classList.add('hidden');
-      if (appEl.requestFullscreen) {
-        appEl.requestFullscreen();
-      }
+      settingsPanel.classList.add("hidden");
+      if (appEl.requestFullscreen) appEl.requestFullscreen();
     } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
+      if (document.exitFullscreen) document.exitFullscreen();
     }
   });
 
-  document.addEventListener('fullscreenchange', () => {
+  document.addEventListener("fullscreenchange", () => {
     if (!document.fullscreenElement) {
-      settingsPanel.classList.remove('hidden');
+      settingsPanel.classList.remove("hidden");
       fullscreenBtn.textContent = "Fullscreen";
     } else {
       fullscreenBtn.textContent = "Exit fullscreen";
     }
   });
 
-  // ====== EVENTS ======
-  spinBtn.addEventListener('click', spin);
-  applyEntriesBtn.addEventListener('click', applyEntries);
+  // ===== Init =====
+  function ensureSliceAngle() {
+    sliceAngle = segments.length ? (2 * Math.PI) / segments.length : 0;
+  }
 
-  // ====== INIT ======
-  entriesInput.value = defaultEntries;
-  segments = parseEntries(defaultEntries);
-  sliceAngle = (2 * Math.PI) / segments.length;
-  resizeConfettiCanvas();
-  drawWheel(currentRotation);
+  async function init() {
+    segments = defaultSegmentsData.map((s, i) => ({
+      label: s.label,
+      url: s.url,
+      color: s.color || colorPalette[i % colorPalette.length],
+      imageDataUrl: null,
+      imageObj: null
+    }));
+    ensureSliceAngle();
+    renderSectorsPanel();
+    resizeConfettiCanvas();
+
+    try {
+      if (document.fonts && document.fonts.load) {
+        await document.fonts.load(FONT_SPEC);
+      }
+    } catch {}
+
+    drawWheel(currentRotation);
+  }
+
+  init();
 </script>
 </body>
 </html>
