@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prize Wheel</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f9;
+    }
+
+    body {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .app {
+      display: flex;
+      flex: 1;
+      max-width: 1400px;
+      padding: 16px;
+      gap: 16px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      position: relative;
+      z-index: 1;
+    }
+
+    .wheel-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .wheel-wrapper {
+      position: relative;
+      width: min(80vmin, 700px);
+      height: min(80vmin, 700px);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #wheelCanvas {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* FULLSCREEN CONFETTI OVERLAY */
+    #confettiCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    .pointer {
+      position: absolute;
+      top: 50%;
+      right: -30px;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 18px solid transparent;
+      border-bottom: 18px solid transparent;
+      /* arrow points LEFT into the wheel */
+      border-right: 30px solid #333;
+      border-left: 0;
+      z-index: 3;
+    }
+
+    .controls-overlay {
+      position: absolute;
+      bottom: 5%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: auto;
+      z-index: 3;
+    }
+
+    .controls-overlay button {
+      padding: 10px 24px;
+      font-size: 1rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: #111;
+      color: #fff;
+    }
+
+    .controls-overlay button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    #result {
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #111;
+    }
+
+    #result a {
+      text-decoration: underline;
+      color: inherit;
+    }
+
+    .panel {
+      width: 360px;
+      max-width: 40%;
+      background: rgba(255,255,255,0.95);
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 2;
+    }
+
+    .panel h2 {
+      margin: 0 0 4px;
+      font-size: 1.1rem;
+    }
+
+    .panel small {
+      font-size: 0.75rem;
+      color: #555;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    .panel button {
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: #222;
+      color: #fff;
+      align-self: flex-start;
+    }
+
+    .panel-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .panel .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        flex-direction: column;
+      }
+      .panel {
+        width: 100%;
+        max-width: 100%;
+        order: -1;
+      }
+      .wheel-wrapper {
+        width: min(90vmin, 600px);
+        height: min(90vmin, 600px);
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="wheel-area" id="wheelArea">
+    <div class="wheel-wrapper">
+      <!-- high-res wheel -->
+      <canvas id="wheelCanvas" width="1000" height="1000"></canvas>
+      <div class="pointer"></div>
+      <div class="controls-overlay">
+        <button id="spinBtn">Spin</button>
+        <div id="result"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="settingsPanel">
+    <div class="panel-row">
+      <h2>Wheel settings</h2>
+      <small>Format: <strong>Label | https://link.com | #color</strong><br>
+        Color is optional, hex or CSS color names work. One entry per line.</small>
+    </div>
+
+    <div class="panel-row">
+      <label for="entriesInput">Entries</label>
+      <textarea id="entriesInput"></textarea>
+      <div class="btn-row">
+        <button id="applyEntriesBtn">Apply entries</button>
+      </div>
+    </div>
+
+    <div class="panel-row">
+      <label for="logoInput">Center logo (optional)</label>
+      <input type="file" id="logoInput" accept="image/*">
+    </div>
+
+    <div class="panel-row">
+      <label for="bgInput">Background image (optional)</label>
+      <input type="file" id="bgInput" accept="image/*">
+    </div>
+
+    <div class="panel-row">
+      <label>Config</label>
+      <div class="btn-row">
+        <button id="exportBtn">Export config</button>
+        <button id="importBtn">Import config</button>
+      </div>
+      <input type="file" id="importInput" accept="application/json" style="display:none">
+    </div>
+
+    <div class="panel-row">
+      <button id="fullscreenBtn">Fullscreen</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFETTI CANVAS FULLSCREEN OVERLAY -->
+<canvas id="confettiCanvas"></canvas>
+
+<script>
+  // ====== INITIAL CONFIG ======
+  const defaultEntries = [
+    "Blum hardware pack | https://example.com/blum | #ff4b4b",
+    "Hinge upgrade | https://example.com/hinges | #ffb347",
+    "Lighting pack | https://example.com/lighting | #ffe66d",
+    "Worktop voucher | https://example.com/worktop | #7bd389",
+    "Kitchen consult | https://example.com/consult | #4f98ca",
+    "Accessory set | https://example.com/accessories | #b084f4",
+    "Mystery prize | https://example.com/mystery | #ff6fb5"
+  ].join("\n");
+
+  const colorPalette = [
+    "#ff4b4b", "#ffb347", "#ffe66d", "#7bd389",
+    "#4f98ca", "#b084f4", "#ff6fb5", "#ffa3a3"
+  ];
+
+  let segments = [];
+  let logoImg = null;
+  let logoDataUrl = null;
+  let bgDataUrl = null;
+
+  const canvas   = document.getElementById('wheelCanvas');
+  const ctx      = canvas.getContext('2d');
+
+  const confettiCanvas = document.getElementById('confettiCanvas');
+  const confettiCtx    = confettiCanvas.getContext('2d');
+
+  const spinBtn  = document.getElementById('spinBtn');
+  const resultEl = document.getElementById('result');
+  const entriesInput = document.getElementById('entriesInput');
+  const applyEntriesBtn = document.getElementById('applyEntriesBtn');
+  const logoInput = document.getElementById('logoInput');
+  const bgInput = document.getElementById('bgInput');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const appEl = document.querySelector('.app');
+
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importInput = document.getElementById('importInput');
+
+  let centerX = canvas.width / 2;
+  let centerY = canvas.height / 2;
+  let radius  = canvas.width / 2 - 10;
+
+  let sliceAngle = 0;
+  let currentRotation = 0; // radians
+  let isSpinning = false;
+
+  // ====== CONFETTI STATE ======
+  let confettiParticles = [];
+
+  function resizeConfettiCanvas() {
+    confettiCanvas.width = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+  }
+
+  window.addEventListener('resize', resizeConfettiCanvas);
+  document.addEventListener('fullscreenchange', resizeConfettiCanvas);
+
+  // ====== SEGMENTS / ENTRIES ======
+  function parseEntries(text) {
+    const lines = text.split("\n")
+      .map(l => l.trim())
+      .filter(Boolean);
+
+    const newSegments = [];
+
+    lines.forEach((line, index) => {
+      const parts = line.split("|").map(p => p.trim());
+      const label = parts[0] || `Choice ${index + 1}`;
+      const url   = parts[1] || "#";
+      const color = parts[2] || colorPalette[index % colorPalette.length];
+
+      newSegments.push({ label, url, color });
+    });
+
+    return newSegments;
+  }
+
+  function applyEntries() {
+    const newSegs = parseEntries(entriesInput.value);
+    if (!newSegs.length) return;
+
+    segments = newSegs;
+    sliceAngle = (2 * Math.PI) / segments.length;
+    currentRotation = 0;
+    drawWheel(currentRotation);
+    resultEl.textContent = "";
+  }
+
+  // ====== DRAWING WHEEL ======
+  function drawWheel(rotation) {
+    if (!segments.length) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+
+    segments.forEach((segment, index) => {
+      const startAngle = rotation + index * sliceAngle;
+      const endAngle   = startAngle + sliceAngle;
+
+      // Slice
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fillStyle = segment.color;
+      ctx.fill();
+
+      // Text
+      ctx.save();
+      const textAngle = startAngle + sliceAngle / 2;
+      ctx.rotate(textAngle);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 26px system-ui";
+      ctx.fillText(segment.label, radius - 40, 10);
+      ctx.restore();
+    });
+
+    // Center circle + optional logo
+    const centerRadius = radius * 0.20; // smaller so it doesn't touch the text
+    ctx.beginPath();
+    ctx.arc(0, 0, centerRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    if (logoImg) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, centerRadius - 6, 0, 2 * Math.PI);
+      ctx.closePath();
+      ctx.clip();
+
+      const size = (centerRadius - 6) * 2;
+      ctx.drawImage(logoImg, -size/2, -size/2, size, size);
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // ====== SPIN LOGIC ======
+  function spin() {
+    if (isSpinning || !segments.length) return;
+
+    isSpinning = true;
+    spinBtn.disabled = true;
+    resultEl.textContent = "";
+
+    const spins = 4 + Math.random() * 3; // 4–7 turns
+    const extraRotation = Math.random() * 2 * Math.PI;
+    const startRotation = currentRotation;
+    const targetRotation = startRotation + spins * 2 * Math.PI + extraRotation;
+    const duration = 4000;
+    const startTime = performance.now();
+
+    function animate(now) {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+
+      currentRotation = startRotation + (targetRotation - startRotation) * eased;
+      drawWheel(currentRotation);
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        isSpinning = false;
+        spinBtn.disabled = false;
+        showWinner();
+      }
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  function showWinner() {
+    if (!segments.length) return;
+
+    let rot = currentRotation % (2 * Math.PI);
+    if (rot < 0) rot += 2 * Math.PI;
+
+    // Pointer is at the RIGHT side (angle 0)
+    const pointerAngleInWheel = (2 * Math.PI - rot) % (2 * Math.PI);
+    let index = Math.floor(pointerAngleInWheel / sliceAngle);
+    if (index === segments.length) index = 0;
+
+    const segment = segments[index];
+
+    resultEl.innerHTML =
+      `You got <strong>${segment.label}</strong>. ` +
+      `<a href="${segment.url}" target="_blank" rel="noopener noreferrer">Open prize page</a>`;
+
+    // launch confetti on win 🎉
+    startConfetti();
+  }
+
+  // ====== CONFETTI EFFECT (FULLSCREEN + FADE) ======
+  function startConfetti() {
+    resizeConfettiCanvas();
+    const width = confettiCanvas.width;
+    const height = confettiCanvas.height;
+
+    const colors = ["#ff4b4b", "#ffd166", "#06d6a0", "#118ab2", "#ef476f", "#ffffff"];
+
+    const count = 200;
+    confettiParticles = [];
+    for (let i = 0; i < count; i++) {
+      confettiParticles.push({
+        x: Math.random() * width,
+        y: Math.random() * -height, // start above
+        r: 4 + Math.random() * 4,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        vx: (Math.random() - 0.5) * 3,
+        vy: 3 + Math.random() * 3,
+        rotation: Math.random() * 2 * Math.PI,
+        vr: (Math.random() - 0.5) * 0.25
+      });
+    }
+
+    const duration = 2000; // total animation ms
+    const start = performance.now();
+
+    function frame(now) {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / duration, 1);
+      const alpha = 1 - t; // fade out
+
+      confettiCtx.clearRect(0, 0, width, height);
+      confettiCtx.save();
+      confettiCtx.globalAlpha = alpha;
+
+      confettiParticles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05;
+        p.rotation += p.vr;
+
+        if (p.y - p.r > height + 20) return;
+
+        confettiCtx.save();
+        confettiCtx.translate(p.x, p.y);
+        confettiCtx.rotate(p.rotation);
+        confettiCtx.fillStyle = p.color;
+        confettiCtx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
+        confettiCtx.restore();
+      });
+
+      confettiCtx.restore();
+
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        confettiCtx.clearRect(0, 0, width, height);
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // ====== FILE HANDLERS (LOGO & BG) ======
+  logoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) {
+      logoImg = null;
+      logoDataUrl = null;
+      drawWheel(currentRotation);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      logoDataUrl = reader.result;
+      const img = new Image();
+      img.onload = () => {
+        logoImg = img;
+        drawWheel(currentRotation);
+      };
+      img.src = logoDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  bgInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) {
+      bgDataUrl = null;
+      appEl.style.backgroundImage = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      bgDataUrl = reader.result;
+      appEl.style.backgroundImage = `url(${bgDataUrl})`;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ====== EXPORT / IMPORT CONFIG ======
+  exportBtn.addEventListener('click', () => {
+    const config = {
+      entries: entriesInput.value,
+      logoDataUrl: logoDataUrl || null,
+      backgroundDataUrl: bgDataUrl || null
+    };
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+      type: "application/json"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    a.href = url;
+    a.download = `wheel-config-${timestamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener('click', () => {
+    importInput.value = ""; // reset
+    importInput.click();
+  });
+
+  importInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+
+        if (typeof data !== "object" || data === null) {
+          alert("Invalid config file.");
+          return;
+        }
+
+        // Entries
+        if (typeof data.entries === "string" && data.entries.trim().length) {
+          entriesInput.value = data.entries;
+          applyEntries();
+        }
+
+        // Background
+        if (typeof data.backgroundDataUrl === "string" && data.backgroundDataUrl.startsWith("data:")) {
+          bgDataUrl = data.backgroundDataUrl;
+          appEl.style.backgroundImage = `url(${bgDataUrl})`;
+        } else {
+          bgDataUrl = null;
+          appEl.style.backgroundImage = "";
+        }
+
+        // Logo
+        if (typeof data.logoDataUrl === "string" && data.logoDataUrl.startsWith("data:")) {
+          logoDataUrl = data.logoDataUrl;
+          const img = new Image();
+          img.onload = () => {
+            logoImg = img;
+            drawWheel(currentRotation);
+          };
+          img.src = logoDataUrl;
+        } else {
+          logoDataUrl = null;
+          logoImg = null;
+          drawWheel(currentRotation);
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Could not read config file.");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // ====== FULLSCREEN / HIDE SETTINGS ======
+  fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      settingsPanel.classList.add('hidden');
+      if (appEl.requestFullscreen) {
+        appEl.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      settingsPanel.classList.remove('hidden');
+      fullscreenBtn.textContent = "Fullscreen";
+    } else {
+      fullscreenBtn.textContent = "Exit fullscreen";
+    }
+  });
+
+  // ====== EVENTS ======
+  spinBtn.addEventListener('click', spin);
+  applyEntriesBtn.addEventListener('click', applyEntries);
+
+  // ====== INIT ======
+  entriesInput.value = defaultEntries;
+  segments = parseEntries(defaultEntries);
+  sliceAngle = (2 * Math.PI) / segments.length;
+  resizeConfettiCanvas();
+  drawWheel(currentRotation);
+</script>
+</body>
+</html>
