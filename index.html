@@ -55,7 +55,7 @@
       border-radius: 50%;
       box-shadow: 0 18px 45px rgba(0,0,0,0.22);
       transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
-      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), transparent 60%);
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0), transparent 60%);
       transform: scale(var(--wheel-zoom));
       transform-origin: center center;
       overflow: visible;
@@ -285,6 +285,40 @@
       box-shadow: inset 0 0 0 1px #111;
     }
 
+    .collapse-toggle,
+    .drag-handle {
+      background: transparent;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: #444;
+    }
+
+    .drag-handle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      gap: 4px;
+    }
+
+    .sector-card.collapsed .sector-body {
+      display: none;
+    }
+
+    .sector-body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sector-card.drag-over {
+      border-color: #111;
+      box-shadow: inset 0 0 0 1px #111;
+    }
+
     .sector-delete {
       background: transparent;
       color: #777;
@@ -328,6 +362,38 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .sector-link-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .link-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .zoom-controls input[type="range"] {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .zoom-value {
+      font-size: 0.8rem;
+      font-weight: 600;
     }
 
     .sector-link-row {
@@ -887,6 +953,64 @@
     drawWheel(currentRotation);
   });
 
+  sectorsContainer.addEventListener("mousedown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    const card = handle?.closest(".sector-card");
+    if (!card) return;
+    dragHandleIndex = parseInt(card.dataset.index, 10);
+  });
+
+  sectorsContainer.addEventListener("dragstart", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (!card) return;
+    const index = parseInt(card.dataset.index, 10);
+    if (dragHandleIndex !== index) {
+      e.preventDefault();
+      return;
+    }
+    dragSourceIndex = index;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", dragSourceIndex.toString());
+  });
+
+  sectorsContainer.addEventListener("dragend", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (card) card.classList.remove("dragging");
+    dragSourceIndex = null;
+    dragHandleIndex = null;
+  });
+
+  sectorsContainer.addEventListener("dragover", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (!card || dragSourceIndex === null) return;
+    e.preventDefault();
+    card.classList.add("drag-over");
+  });
+
+  sectorsContainer.addEventListener("dragleave", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (card) card.classList.remove("drag-over");
+  });
+
+  sectorsContainer.addEventListener("drop", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (!card || dragSourceIndex === null) return;
+    e.preventDefault();
+    card.classList.remove("drag-over");
+    const destIndex = parseInt(card.dataset.index, 10);
+    if (Number.isNaN(destIndex) || destIndex === dragSourceIndex) return;
+
+    const [moved] = segments.splice(dragSourceIndex, 1);
+    const insertionIndex = destIndex > dragSourceIndex ? destIndex - 1 : destIndex;
+    segments.splice(insertionIndex, 0, moved);
+    dragSourceIndex = null;
+
+    ensureSliceAngle();
+    renderSectorsPanel();
+    drawWheel(currentRotation);
+  });
+
   addSectorBtn.addEventListener("click", () => {
     addSector();
   });
@@ -894,6 +1018,28 @@
   showImagesToggle.addEventListener("change", () => {
     showImages = showImagesToggle.checked;
     drawWheel(currentRotation);
+  });
+
+  function setWheelZoom(value) {
+    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
+    wheelZoom = clamped;
+    wheelWrapper.style.setProperty("--wheel-zoom", clamped.toString());
+    if (zoomSlider) zoomSlider.value = clamped.toFixed(2);
+    if (zoomValue) zoomValue.textContent = `${Math.round(clamped * 100)}%`;
+  }
+
+  if (zoomSlider) {
+    zoomSlider.addEventListener("input", () => {
+      const val = parseFloat(zoomSlider.value);
+      if (!Number.isNaN(val)) setWheelZoom(val);
+    });
+  }
+
+  zoomButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const delta = parseFloat(btn.dataset.delta || "0");
+      setWheelZoom(wheelZoom + delta);
+    });
   });
 
   function setWheelZoom(value) {
