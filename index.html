@@ -47,6 +47,7 @@
     }
 
     .wheel-wrapper {
+      --wheel-zoom: 1;
       position: relative;
       width: min(80vmin, 700px);
       height: min(80vmin, 700px);
@@ -55,10 +56,13 @@
       box-shadow: 0 18px 45px rgba(0,0,0,0.22);
       transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
       background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), transparent 60%);
+      transform: scale(var(--wheel-zoom));
+      transform-origin: center center;
+      overflow: visible;
     }
 
     .wheel-wrapper.spin-anim {
-      transform: scale(1.03);
+      transform: scale(calc(var(--wheel-zoom) * 1.03));
       box-shadow: 0 24px 60px rgba(0,0,0,0.30);
     }
 
@@ -215,6 +219,7 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      position: relative;
     }
 
     .sector-header {
@@ -232,12 +237,52 @@
       font-size: 0.75rem;
     }
 
+    .sector-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .sector-color-dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
       border: 1px solid rgba(0,0,0,0.2);
       background: #ccc;
+    }
+
+    .collapse-toggle,
+    .drag-handle {
+      background: transparent;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: #444;
+    }
+
+    .drag-handle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      gap: 4px;
+    }
+
+    .sector-card.collapsed .sector-body {
+      display: none;
+    }
+
+    .sector-body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sector-card.drag-over {
+      border-color: #111;
+      box-shadow: inset 0 0 0 1px #111;
     }
 
     .sector-delete {
@@ -283,6 +328,38 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .sector-link-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .link-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .zoom-controls input[type="range"] {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .zoom-value {
+      font-size: 0.8rem;
+      font-weight: 600;
     }
 
     .hidden {
@@ -369,17 +446,6 @@
         max-width: 100%;
         order: -1;
       }
-      .wheel-wrapper {
-  position: relative;
-  width: min(80vmin, 700px);
-  height: min(80vmin, 700px);
-  cursor: pointer;
-  border-radius: 50%;
-  overflow: visible;            /* add this */
-  box-shadow: 0 18px 45px rgba(0,0,0,0.22);
-  transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), transparent 60%);
-}
 
     }
   </style>
@@ -405,6 +471,16 @@
         <input type="checkbox" id="showImagesToggle" checked>
         Show prize images on sectors
       </label>
+    </div>
+
+    <div class="panel-row">
+      <label for="zoomSlider">Wheel zoom</label>
+      <div class="zoom-controls">
+        <button type="button" class="zoom-btn" data-delta="-0.05">−</button>
+        <input type="range" id="zoomSlider" min="0.7" max="1.3" step="0.05" value="1">
+        <button type="button" class="zoom-btn" data-delta="0.05">+</button>
+        <span class="zoom-value" id="zoomValue">100%</span>
+      </div>
     </div>
 
     <div class="panel-row">
@@ -471,11 +547,12 @@
   ];
 
   // state
-  let segments = []; // {label,url,color,imageDataUrl,imageObj}
+  let segments = []; // {label,url,color,imageDataUrl,imageObj,linkEnabled,collapsed}
   let showImages = true;
   let logoImg = null;
   let logoDataUrl = null;
   let bgDataUrl = null;
+  let wheelZoom = 1;
 
   const canvas   = document.getElementById("wheelCanvas");
   const ctx      = canvas.getContext("2d");
@@ -496,6 +573,9 @@
   const importBtn        = document.getElementById("importBtn");
   const importInput      = document.getElementById("importInput");
   const fullscreenBtn    = document.getElementById("fullscreenBtn");
+  const zoomSlider       = document.getElementById("zoomSlider");
+  const zoomValue        = document.getElementById("zoomValue");
+  const zoomButtons      = document.querySelectorAll(".zoom-btn");
 
   const resultModal     = document.getElementById("resultModal");
   const resultBackdrop  = document.getElementById("resultBackdrop");
@@ -504,10 +584,14 @@
   const resultLinkEl    = document.getElementById("resultLink");
   const resultCloseBtn  = document.getElementById("resultClose");
 
+  const OUTER_PADDING = 80;
+  const ZOOM_MIN = 0.7;
+  const ZOOM_MAX = 1.3;
+
   let centerX = canvas.width / 2;
   let centerY = canvas.height / 2;
   // smaller radius, leaving margin for pop-out PNGs
-  let radius  = canvas.width / 2 - 10; // instead of -80
+  let radius  = canvas.width / 2 - OUTER_PADDING;
 
 
   let sliceAngle = 0;
@@ -515,6 +599,8 @@
   let isSpinning = false;
 
   let confettiParticles = [];
+  let dragSourceIndex = null;
+  let dragHandleIndex = null;
 
   function resizeConfettiCanvas() {
     confettiCanvas.width = window.innerWidth;
@@ -575,7 +661,9 @@
       url: base.url || "#",
       color: base.color || colorPalette[idx % colorPalette.length],
       imageDataUrl: base.imageDataUrl || null,
-      imageObj: base.imageObj || null
+      imageObj: base.imageObj || null,
+      linkEnabled: base.linkEnabled !== false,
+      collapsed: !!base.collapsed
     });
     ensureSliceAngle();
     renderSectorsPanel();
@@ -594,40 +682,60 @@
     sectorsContainer.innerHTML = "";
     segments.forEach((seg, i) => {
       const card = document.createElement("div");
-      card.className = "sector-card";
+      const isCollapsed = !!seg.collapsed;
+      card.className = `sector-card${isCollapsed ? " collapsed" : ""}`;
       card.dataset.index = i.toString();
+      card.setAttribute("draggable", "true");
+
+      const safeLabel = seg.label.replace(/"/g, "&quot;");
+      const safeUrl = seg.url.replace(/"/g, "&quot;");
+      const previewStyle = seg.imageDataUrl ? `background-image:url(${seg.imageDataUrl})` : "background-image:none";
 
       card.innerHTML = `
         <div class="sector-header">
           <div class="sector-badge">
+            <button type="button" class="drag-handle" title="Drag to reorder">☰</button>
             <span>Sector ${i + 1}</span>
             <span class="sector-color-dot" style="background:${seg.color};"></span>
           </div>
-          <button type="button" class="sector-delete"${segments.length <= 1 ? " disabled" : ""} title="Remove sector">
-            ✕
-          </button>
-        </div>
-
-        <div>
-          <label>Label</label>
-          <input type="text" class="sector-label" value="${seg.label.replace(/"/g, "&quot;")}" />
-        </div>
-
-        <div>
-          <label>Link</label>
-          <input type="url" class="sector-url" value="${seg.url.replace(/"/g, "&quot;")}" />
-        </div>
-
-        <div class="sector-row-inline">
-          <div>
-            <label>Color</label>
-            <input type="color" class="sector-color" value="${seg.color}" />
+          <div class="sector-actions">
+            <button type="button" class="collapse-toggle" aria-expanded="${!isCollapsed}" title="${isCollapsed ? "Expand" : "Collapse"}">
+              ${isCollapsed ? "▸" : "▾"}
+            </button>
+            <button type="button" class="sector-delete"${segments.length <= 1 ? " disabled" : ""} title="Remove sector">
+              ✕
+            </button>
           </div>
-          <div class="sector-image-wrapper">
-            <div class="sector-image-preview" style="background-image:${seg.imageDataUrl ? `url(${seg.imageDataUrl})` : "none"}"></div>
-            <div style="flex:1;">
-              <label style="font-weight:500;">Image (PNG)</label>
-              <input type="file" class="sector-image" accept="image/*">
+        </div>
+
+        <div class="sector-body">
+          <div>
+            <label>Label</label>
+            <input type="text" class="sector-label" value="${safeLabel}" />
+          </div>
+
+          <div>
+            <div class="sector-link-row">
+              <label>Link</label>
+              <label class="link-toggle">
+                <input type="checkbox" class="sector-link-enabled"${seg.linkEnabled === false ? "" : " checked"} />
+                Enable link
+              </label>
+            </div>
+            <input type="url" class="sector-url" value="${safeUrl}" ${seg.linkEnabled === false ? "disabled" : ""} />
+          </div>
+
+          <div class="sector-row-inline">
+            <div>
+              <label>Color</label>
+              <input type="color" class="sector-color" value="${seg.color}" />
+            </div>
+            <div class="sector-image-wrapper">
+              <div class="sector-image-preview" style="${previewStyle}"></div>
+              <div style="flex:1;">
+                <label style="font-weight:500;">Image (PNG)</label>
+                <input type="file" class="sector-image" accept="image/*">
+              </div>
             </div>
           </div>
         </div>
@@ -658,16 +766,24 @@
     drawWheel(currentRotation);
   });
 
-  // image loading – PNG, no clipping
+  // image loading – PNG, no clipping & link toggles
   sectorsContainer.addEventListener("change", (e) => {
     const target = e.target;
-    if (!target.classList.contains("sector-image")) return;
-
     const card = target.closest(".sector-card");
     if (!card) return;
     const index = parseInt(card.dataset.index, 10);
     const seg = segments[index];
     if (!seg) return;
+
+    if (target.classList.contains("sector-link-enabled")) {
+      seg.linkEnabled = target.checked;
+      const urlInput = card.querySelector(".sector-url");
+      if (urlInput) urlInput.disabled = !seg.linkEnabled;
+      drawWheel(currentRotation);
+      return;
+    }
+
+    if (!target.classList.contains("sector-image")) return;
 
     const preview = card.querySelector(".sector-image-preview");
 
@@ -702,7 +818,73 @@
       if (!card) return;
       const index = parseInt(card.dataset.index, 10);
       removeSector(index);
+    } else if (target.classList.contains("collapse-toggle")) {
+      const card = target.closest(".sector-card");
+      if (!card) return;
+      const index = parseInt(card.dataset.index, 10);
+      const seg = segments[index];
+      if (!seg) return;
+      seg.collapsed = !seg.collapsed;
+      renderSectorsPanel();
     }
+  });
+
+  sectorsContainer.addEventListener("mousedown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    const card = handle?.closest(".sector-card");
+    if (!card) return;
+    dragHandleIndex = parseInt(card.dataset.index, 10);
+  });
+
+  sectorsContainer.addEventListener("dragstart", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (!card) return;
+    const index = parseInt(card.dataset.index, 10);
+    if (dragHandleIndex !== index) {
+      e.preventDefault();
+      return;
+    }
+    dragSourceIndex = index;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", dragSourceIndex.toString());
+  });
+
+  sectorsContainer.addEventListener("dragend", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (card) card.classList.remove("dragging");
+    dragSourceIndex = null;
+    dragHandleIndex = null;
+  });
+
+  sectorsContainer.addEventListener("dragover", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (!card || dragSourceIndex === null) return;
+    e.preventDefault();
+    card.classList.add("drag-over");
+  });
+
+  sectorsContainer.addEventListener("dragleave", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (card) card.classList.remove("drag-over");
+  });
+
+  sectorsContainer.addEventListener("drop", (e) => {
+    const card = e.target.closest(".sector-card");
+    if (!card || dragSourceIndex === null) return;
+    e.preventDefault();
+    card.classList.remove("drag-over");
+    const destIndex = parseInt(card.dataset.index, 10);
+    if (Number.isNaN(destIndex) || destIndex === dragSourceIndex) return;
+
+    const [moved] = segments.splice(dragSourceIndex, 1);
+    const insertionIndex = destIndex > dragSourceIndex ? destIndex - 1 : destIndex;
+    segments.splice(insertionIndex, 0, moved);
+    dragSourceIndex = null;
+
+    ensureSliceAngle();
+    renderSectorsPanel();
+    drawWheel(currentRotation);
   });
 
   addSectorBtn.addEventListener("click", () => {
@@ -712,6 +894,28 @@
   showImagesToggle.addEventListener("change", () => {
     showImages = showImagesToggle.checked;
     drawWheel(currentRotation);
+  });
+
+  function setWheelZoom(value) {
+    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
+    wheelZoom = clamped;
+    wheelWrapper.style.setProperty("--wheel-zoom", clamped.toString());
+    if (zoomSlider) zoomSlider.value = clamped.toFixed(2);
+    if (zoomValue) zoomValue.textContent = `${Math.round(clamped * 100)}%`;
+  }
+
+  if (zoomSlider) {
+    zoomSlider.addEventListener("input", () => {
+      const val = parseFloat(zoomSlider.value);
+      if (!Number.isNaN(val)) setWheelZoom(val);
+    });
+  }
+
+  zoomButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const delta = parseFloat(btn.dataset.delta || "0");
+      setWheelZoom(wheelZoom + delta);
+    });
   });
 
   // ===== Modal =====
@@ -869,7 +1073,9 @@
 
     resultTitleEl.textContent = "You got:";
     resultTextEl.textContent = segment.label;
-    resultLinkEl.href = segment.url || "#";
+    const linkAllowed = segment.linkEnabled !== false && segment.url && segment.url !== "#";
+    resultLinkEl.href = linkAllowed ? segment.url : "#";
+    resultLinkEl.classList.toggle("hidden", !linkAllowed);
 
     showResultModal();
     startConfetti();
@@ -982,7 +1188,8 @@
         label: s.label,
         url: s.url,
         color: s.color,
-        imageDataUrl: s.imageDataUrl || null
+        imageDataUrl: s.imageDataUrl || null,
+        linkEnabled: s.linkEnabled !== false
       })),
       showImages,
       logoDataUrl: logoDataUrl || null,
@@ -1029,7 +1236,9 @@
             url: s.url || "#",
             color: s.color || colorPalette[i % colorPalette.length],
             imageDataUrl: s.imageDataUrl || null,
-            imageObj: null
+            imageObj: null,
+            linkEnabled: s.linkEnabled !== false,
+            collapsed: false
           }));
         } else if (typeof data.entries === "string" && data.entries.trim().length) {
           const lines = data.entries.split("\n").map(l => l.trim()).filter(Boolean);
@@ -1040,7 +1249,9 @@
               url: parts[1] || "#",
               color: parts[2] || colorPalette[i % colorPalette.length],
               imageDataUrl: null,
-              imageObj: null
+              imageObj: null,
+              linkEnabled: true,
+              collapsed: false
             };
           });
         }
@@ -1128,11 +1339,14 @@
       url: s.url,
       color: s.color || colorPalette[i % colorPalette.length],
       imageDataUrl: null,
-      imageObj: null
+      imageObj: null,
+      linkEnabled: true,
+      collapsed: false
     }));
     ensureSliceAngle();
     renderSectorsPanel();
     resizeConfettiCanvas();
+    setWheelZoom(1);
 
     try {
       if (document.fonts && document.fonts.load) {
