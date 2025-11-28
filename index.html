@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>Prize Wheel</title>
 
-  <!-- Google Font: Montserrat -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
 
   <style>
@@ -67,11 +66,10 @@
     }
 
     canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  /* no border-radius here */
-}
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
 
 
     #wheelCanvas {
@@ -285,40 +283,6 @@
       box-shadow: inset 0 0 0 1px #111;
     }
 
-    .collapse-toggle,
-    .drag-handle {
-      background: transparent;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 4px 8px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      color: #444;
-    }
-
-    .drag-handle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.9rem;
-      gap: 4px;
-    }
-
-    .sector-card.collapsed .sector-body {
-      display: none;
-    }
-
-    .sector-body {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .sector-card.drag-over {
-      border-color: #111;
-      box-shadow: inset 0 0 0 1px #111;
-    }
-
     .sector-delete {
       background: transparent;
       color: #777;
@@ -362,38 +326,6 @@
       display: flex;
       align-items: center;
       gap: 8px;
-    }
-
-    .sector-link-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .link-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 500;
-      font-size: 0.75rem;
-    }
-
-    .zoom-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .zoom-controls input[type="range"] {
-      flex: 1;
-      min-width: 140px;
-    }
-
-    .zoom-value {
-      font-size: 0.8rem;
-      font-weight: 600;
     }
 
     .sector-link-row {
@@ -520,7 +452,6 @@
 <div class="app">
   <div class="wheel-area" id="wheelArea">
     <div class="wheel-wrapper" id="wheelWrapper">
-      <!-- increased canvas size to give room for pop-out images -->
       <canvas id="wheelCanvas" width="1200" height="1200"></canvas>
       <div class="pointer"></div>
     </div>
@@ -529,7 +460,7 @@
   <div class="panel" id="settingsPanel">
     <div class="panel-row">
       <h2>Prize wheel</h2>
-      <small>Click the wheel to spin. Configure each sector below.</small>
+      <small>Click the wheel to spin. Changes save automatically.</small>
     </div>
 
     <div class="panel-row">
@@ -553,6 +484,7 @@
       <div class="sectors-container" id="sectorsContainer"></div>
       <div class="btn-row">
         <button id="addSectorBtn">+ Add sector</button>
+        <button id="resetBtn" style="background:#ff4b4b;">Reset to Default</button>
       </div>
     </div>
 
@@ -580,7 +512,6 @@
     </div>
   </div>
 
-  <!-- CONFETTI & RESULT MODAL INSIDE .app (so they show in fullscreen) -->
   <canvas id="confettiCanvas"></canvas>
 
   <div id="resultModal" class="result-modal hidden">
@@ -596,6 +527,7 @@
 
 <script>
   const FONT_SPEC = "600 26px 'Montserrat', system-ui";
+  const LOCAL_STORAGE_KEY = "prize_wheel_config";
 
   const defaultSegmentsData = [
     { label: "Blum hardware pack", url: "https://example.com/blum",  color: "#ff4b4b" },
@@ -632,6 +564,7 @@
 
   const sectorsContainer = document.getElementById("sectorsContainer");
   const addSectorBtn     = document.getElementById("addSectorBtn");
+  const resetBtn         = document.getElementById("resetBtn");
   const showImagesToggle = document.getElementById("showImagesToggle");
   const logoInput        = document.getElementById("logoInput");
   const bgInput          = document.getElementById("bgInput");
@@ -658,7 +591,6 @@
   let centerY = canvas.height / 2;
   // smaller radius, leaving margin for pop-out PNGs
   let radius  = canvas.width / 2 - OUTER_PADDING;
-
 
   let sliceAngle = 0;
   let currentRotation = 0;
@@ -714,6 +646,31 @@
     }
   }
 
+  // ===== State Management (Persistence) =====
+  function saveLocalState() {
+    // We strip out the image objects (only keep DataURLs)
+    const state = {
+      segments: segments.map(s => ({
+        label: s.label,
+        url: s.url,
+        color: s.color,
+        imageDataUrl: s.imageDataUrl || null,
+        linkEnabled: s.linkEnabled,
+        collapsed: s.collapsed
+      })),
+      showImages,
+      wheelZoom,
+      logoDataUrl,
+      bgDataUrl
+    };
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn("Could not save to localStorage (likely quota exceeded due to large images).", e);
+    }
+  }
+
   // ===== Sector management & UI =====
   function ensureSliceAngle() {
     sliceAngle = segments.length ? (2 * Math.PI) / segments.length : 0;
@@ -734,6 +691,7 @@
     ensureSliceAngle();
     renderSectorsPanel();
     drawWheel(currentRotation);
+    saveLocalState();
   }
 
   function removeSector(index) {
@@ -742,6 +700,7 @@
     ensureSliceAngle();
     renderSectorsPanel();
     drawWheel(currentRotation);
+    saveLocalState();
   }
 
   function renderSectorsPanel() {
@@ -830,6 +789,7 @@
     if (dot) dot.style.background = seg.color;
 
     drawWheel(currentRotation);
+    saveLocalState();
   });
 
   // image loading – PNG, no clipping & link toggles
@@ -846,6 +806,7 @@
       const urlInput = card.querySelector(".sector-url");
       if (urlInput) urlInput.disabled = !seg.linkEnabled;
       drawWheel(currentRotation);
+      saveLocalState();
       return;
     }
 
@@ -859,6 +820,7 @@
       seg.imageObj = null;
       if (preview) preview.style.backgroundImage = "none";
       drawWheel(currentRotation);
+      saveLocalState();
       return;
     }
 
@@ -871,6 +833,7 @@
         seg.imageObj = img;
         if (preview) preview.style.backgroundImage = `url(${dataUrl})`;
         drawWheel(currentRotation);
+        saveLocalState();
       };
       img.src = dataUrl;
     };
@@ -892,9 +855,11 @@
       if (!seg) return;
       seg.collapsed = !seg.collapsed;
       renderSectorsPanel();
+      saveLocalState();
     }
   });
 
+  // Drag and drop logic
   sectorsContainer.addEventListener("mousedown", (e) => {
     const handle = e.target.closest(".drag-handle");
     const card = handle?.closest(".sector-card");
@@ -951,73 +916,25 @@
     ensureSliceAngle();
     renderSectorsPanel();
     drawWheel(currentRotation);
-  });
-
-  sectorsContainer.addEventListener("mousedown", (e) => {
-    const handle = e.target.closest(".drag-handle");
-    const card = handle?.closest(".sector-card");
-    if (!card) return;
-    dragHandleIndex = parseInt(card.dataset.index, 10);
-  });
-
-  sectorsContainer.addEventListener("dragstart", (e) => {
-    const card = e.target.closest(".sector-card");
-    if (!card) return;
-    const index = parseInt(card.dataset.index, 10);
-    if (dragHandleIndex !== index) {
-      e.preventDefault();
-      return;
-    }
-    dragSourceIndex = index;
-    card.classList.add("dragging");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", dragSourceIndex.toString());
-  });
-
-  sectorsContainer.addEventListener("dragend", (e) => {
-    const card = e.target.closest(".sector-card");
-    if (card) card.classList.remove("dragging");
-    dragSourceIndex = null;
-    dragHandleIndex = null;
-  });
-
-  sectorsContainer.addEventListener("dragover", (e) => {
-    const card = e.target.closest(".sector-card");
-    if (!card || dragSourceIndex === null) return;
-    e.preventDefault();
-    card.classList.add("drag-over");
-  });
-
-  sectorsContainer.addEventListener("dragleave", (e) => {
-    const card = e.target.closest(".sector-card");
-    if (card) card.classList.remove("drag-over");
-  });
-
-  sectorsContainer.addEventListener("drop", (e) => {
-    const card = e.target.closest(".sector-card");
-    if (!card || dragSourceIndex === null) return;
-    e.preventDefault();
-    card.classList.remove("drag-over");
-    const destIndex = parseInt(card.dataset.index, 10);
-    if (Number.isNaN(destIndex) || destIndex === dragSourceIndex) return;
-
-    const [moved] = segments.splice(dragSourceIndex, 1);
-    const insertionIndex = destIndex > dragSourceIndex ? destIndex - 1 : destIndex;
-    segments.splice(insertionIndex, 0, moved);
-    dragSourceIndex = null;
-
-    ensureSliceAngle();
-    renderSectorsPanel();
-    drawWheel(currentRotation);
+    saveLocalState();
   });
 
   addSectorBtn.addEventListener("click", () => {
     addSector();
   });
 
+  // Reset Button
+  resetBtn.addEventListener("click", () => {
+    if(confirm("Are you sure you want to reset the wheel to default? This will clear all your changes.")) {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      location.reload();
+    }
+  });
+
   showImagesToggle.addEventListener("change", () => {
     showImages = showImagesToggle.checked;
     drawWheel(currentRotation);
+    saveLocalState();
   });
 
   function setWheelZoom(value) {
@@ -1026,28 +943,7 @@
     wheelWrapper.style.setProperty("--wheel-zoom", clamped.toString());
     if (zoomSlider) zoomSlider.value = clamped.toFixed(2);
     if (zoomValue) zoomValue.textContent = `${Math.round(clamped * 100)}%`;
-  }
-
-  if (zoomSlider) {
-    zoomSlider.addEventListener("input", () => {
-      const val = parseFloat(zoomSlider.value);
-      if (!Number.isNaN(val)) setWheelZoom(val);
-    });
-  }
-
-  zoomButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const delta = parseFloat(btn.dataset.delta || "0");
-      setWheelZoom(wheelZoom + delta);
-    });
-  });
-
-  function setWheelZoom(value) {
-    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
-    wheelZoom = clamped;
-    wheelWrapper.style.setProperty("--wheel-zoom", clamped.toString());
-    if (zoomSlider) zoomSlider.value = clamped.toFixed(2);
-    if (zoomValue) zoomValue.textContent = `${Math.round(clamped * 100)}%`;
+    saveLocalState();
   }
 
   if (zoomSlider) {
@@ -1224,68 +1120,82 @@
     resultLinkEl.classList.toggle("hidden", !linkAllowed);
 
     showResultModal();
-    startConfetti();
+    startConfettiBomb();
   }
 
   wheelWrapper.addEventListener("click", spin);
 
-  // ===== Confetti =====
-  function startConfetti() {
+  // ===== Confetti BOMB =====
+  function startConfettiBomb() {
     resizeConfettiCanvas();
     const width = confettiCanvas.width;
     const height = confettiCanvas.height;
-
-    const colors = ["#ff4b4b", "#ffd166", "#06d6a0", "#118ab2", "#ef476f", "#ffffff"];
-
-    const count = 200;
+    
+    // Much more particles
+    const count = 1500;
+    const colors = ["#ff4b4b", "#ffd166", "#06d6a0", "#118ab2", "#ef476f", "#ffffff", "#FD5DA8"];
+    
     confettiParticles = [];
+    
     for (let i = 0; i < count; i++) {
+      // Create explosion from center
+      const angle = Math.random() * Math.PI * 2;
+      const velocity = 10 + Math.random() * 25; // high initial speed
+
       confettiParticles.push({
-        x: Math.random() * width,
-        y: Math.random() * -height,
-        r: 4 + Math.random() * 4,
+        x: width / 2,
+        y: height / 2,
+        r: 3 + Math.random() * 6,
         color: colors[Math.floor(Math.random() * colors.length)],
-        vx: (Math.random() - 0.5) * 3,
-        vy: 3 + Math.random() * 3,
+        vx: Math.cos(angle) * velocity,
+        vy: Math.sin(angle) * velocity,
+        gravity: 0.5 + Math.random() * 0.2, // heavier gravity
+        drag: 0.92 + Math.random() * 0.05, // air resistance
         rotation: Math.random() * 2 * Math.PI,
-        vr: (Math.random() - 0.5) * 0.25
+        vr: (Math.random() - 0.5) * 0.5
       });
     }
 
-    const duration = 2000;
+    const duration = 4500; // longer duration
     const start = performance.now();
 
     function frame(now) {
       const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      const alpha = 1 - t;
+      if (elapsed > duration) {
+         confettiCtx.clearRect(0, 0, width, height);
+         return;
+      }
 
       confettiCtx.clearRect(0, 0, width, height);
-      confettiCtx.save();
-      confettiCtx.globalAlpha = alpha;
-
+      
       confettiParticles.forEach(p => {
+        // Apply Physics
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.05;
+        p.vy += p.gravity; // Gravity
+        p.vx *= p.drag;    // Air resistance
+        p.vy *= p.drag;
         p.rotation += p.vr;
-        if (p.y - p.r > height + 20) return;
 
+        // Draw
         confettiCtx.save();
         confettiCtx.translate(p.x, p.y);
         confettiCtx.rotate(p.rotation);
         confettiCtx.fillStyle = p.color;
-        confettiCtx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
+        
+        // Random shapes (circles and rects)
+        if (p.r % 2 > 1) {
+            confettiCtx.beginPath();
+            confettiCtx.arc(0, 0, p.r, 0, 2 * Math.PI);
+            confettiCtx.fill();
+        } else {
+            confettiCtx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
+        }
+        
         confettiCtx.restore();
       });
 
-      confettiCtx.restore();
-
-      if (t < 1) {
-        requestAnimationFrame(frame);
-      } else {
-        confettiCtx.clearRect(0, 0, width, height);
-      }
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
@@ -1297,6 +1207,7 @@
       logoImg = null;
       logoDataUrl = null;
       drawWheel(currentRotation);
+      saveLocalState();
       return;
     }
     const reader = new FileReader();
@@ -1306,6 +1217,7 @@
       img.onload = () => {
         logoImg = img;
         drawWheel(currentRotation);
+        saveLocalState();
       };
       img.src = logoDataUrl;
     };
@@ -1317,12 +1229,14 @@
     if (!file) {
       bgDataUrl = null;
       appEl.style.backgroundImage = "";
+      saveLocalState();
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       bgDataUrl = reader.result;
       appEl.style.backgroundImage = `url(${bgDataUrl})`;
+      saveLocalState();
     };
     reader.readAsDataURL(file);
   });
@@ -1370,83 +1284,8 @@
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-
-        if (typeof data !== "object" || data === null) {
-          alert("Invalid config file.");
-          return;
-        }
-
-        if (Array.isArray(data.segments) && data.segments.length) {
-          segments = data.segments.map((s, i) => ({
-            label: s.label || `Prize ${i + 1}`,
-            url: s.url || "#",
-            color: s.color || colorPalette[i % colorPalette.length],
-            imageDataUrl: s.imageDataUrl || null,
-            imageObj: null,
-            linkEnabled: s.linkEnabled !== false,
-            collapsed: false
-          }));
-        } else if (typeof data.entries === "string" && data.entries.trim().length) {
-          const lines = data.entries.split("\n").map(l => l.trim()).filter(Boolean);
-          segments = lines.map((line, i) => {
-            const parts = line.split("|").map(p => p.trim());
-            return {
-              label: parts[0] || `Prize ${i + 1}`,
-              url: parts[1] || "#",
-              color: parts[2] || colorPalette[i % colorPalette.length],
-              imageDataUrl: null,
-              imageObj: null,
-              linkEnabled: true,
-              collapsed: false
-            };
-          });
-        }
-
-        if (!segments.length) {
-          alert("Config has no segments.");
-          return;
-        }
-
-        showImages = data.showImages !== false;
-        showImagesToggle.checked = showImages;
-
-        ensureSliceAngle();
-        renderSectorsPanel();
-
-        if (typeof data.backgroundDataUrl === "string" && data.backgroundDataUrl.startsWith("data:")) {
-          bgDataUrl = data.backgroundDataUrl;
-          appEl.style.backgroundImage = `url(${bgDataUrl})`;
-        } else {
-          bgDataUrl = null;
-          appEl.style.backgroundImage = "";
-        }
-
-        if (typeof data.logoDataUrl === "string" && data.logoDataUrl.startsWith("data:")) {
-          logoDataUrl = data.logoDataUrl;
-          const img = new Image();
-          img.onload = () => {
-            logoImg = img;
-            drawWheel(currentRotation);
-          };
-          img.src = logoDataUrl;
-        } else {
-          logoDataUrl = null;
-          logoImg = null;
-          drawWheel(currentRotation);
-        }
-
-        segments.forEach((s) => {
-          if (s.imageDataUrl) {
-            const img = new Image();
-            img.onload = () => {
-              s.imageObj = img;
-              drawWheel(currentRotation);
-            };
-            img.src = s.imageDataUrl;
-          }
-        });
-
-        drawWheel(currentRotation);
+        loadConfig(data);
+        saveLocalState();
       } catch (err) {
         console.error(err);
         alert("Could not read config file.");
@@ -1454,6 +1293,70 @@
     };
     reader.readAsText(file);
   });
+
+  function loadConfig(data) {
+    if (typeof data !== "object" || data === null) return;
+
+    if (Array.isArray(data.segments) && data.segments.length) {
+      segments = data.segments.map((s, i) => ({
+        label: s.label || `Prize ${i + 1}`,
+        url: s.url || "#",
+        color: s.color || colorPalette[i % colorPalette.length],
+        imageDataUrl: s.imageDataUrl || null,
+        imageObj: null,
+        linkEnabled: s.linkEnabled !== false,
+        collapsed: s.collapsed || false
+      }));
+    }
+
+    if (!segments.length) return;
+
+    showImages = data.showImages !== false;
+    showImagesToggle.checked = showImages;
+
+    if (data.wheelZoom) {
+        setWheelZoom(data.wheelZoom);
+    }
+
+    ensureSliceAngle();
+    renderSectorsPanel();
+
+    if (typeof data.backgroundDataUrl === "string" && data.backgroundDataUrl.startsWith("data:")) {
+      bgDataUrl = data.backgroundDataUrl;
+      appEl.style.backgroundImage = `url(${bgDataUrl})`;
+    } else {
+      bgDataUrl = null;
+      appEl.style.backgroundImage = "";
+    }
+
+    if (typeof data.logoDataUrl === "string" && data.logoDataUrl.startsWith("data:")) {
+      logoDataUrl = data.logoDataUrl;
+      const img = new Image();
+      img.onload = () => {
+        logoImg = img;
+        drawWheel(currentRotation);
+      };
+      img.src = logoDataUrl;
+    } else {
+      logoDataUrl = null;
+      logoImg = null;
+      drawWheel(currentRotation);
+    }
+
+    // Load images async
+    segments.forEach((s) => {
+      if (s.imageDataUrl) {
+        const img = new Image();
+        img.onload = () => {
+          s.imageObj = img;
+          drawWheel(currentRotation);
+        };
+        img.src = s.imageDataUrl;
+      }
+    });
+
+    drawWheel(currentRotation);
+  }
 
   // ===== Fullscreen =====
   fullscreenBtn.addEventListener("click", () => {
@@ -1475,24 +1378,22 @@
   });
 
   // ===== Init =====
-  function ensureSliceAngle() {
-    sliceAngle = segments.length ? (2 * Math.PI) / segments.length : 0;
-  }
-
   async function init() {
-    segments = defaultSegmentsData.map((s, i) => ({
-      label: s.label,
-      url: s.url,
-      color: s.color || colorPalette[i % colorPalette.length],
-      imageDataUrl: null,
-      imageObj: null,
-      linkEnabled: true,
-      collapsed: false
-    }));
-    ensureSliceAngle();
-    renderSectorsPanel();
     resizeConfettiCanvas();
-    setWheelZoom(1);
+    
+    // 1. Try to load from Local Storage
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        loadConfig(data);
+      } catch(e) {
+        console.error("Error loading saved state", e);
+        loadDefault();
+      }
+    } else {
+      loadDefault();
+    }
 
     try {
       if (document.fonts && document.fonts.load) {
@@ -1503,8 +1404,22 @@
     drawWheel(currentRotation);
   }
 
+  function loadDefault() {
+      segments = defaultSegmentsData.map((s, i) => ({
+      label: s.label,
+      url: s.url,
+      color: s.color || colorPalette[i % colorPalette.length],
+      imageDataUrl: null,
+      imageObj: null,
+      linkEnabled: true,
+      collapsed: false
+    }));
+    setWheelZoom(1);
+    ensureSliceAngle();
+    renderSectorsPanel();
+  }
+
   init();
 </script>
 </body>
 </html>
-
