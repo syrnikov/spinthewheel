@@ -15,7 +15,7 @@
       margin: 0;
       height: 100%;
       font-family: "Montserrat", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0e100a;
+      background: #f5f5f9;
     }
 
     body {
@@ -698,8 +698,9 @@
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
-      console.warn("Storage full. Could not save state.", e);
-      alert("Warning: Your images are too large to save automatically. Try using smaller images.");
+      console.warn("Storage full. Could not save state. Data size:", JSON.stringify(state).length / 1024 / 1024, "MB", e);
+      // We will only alert if image processing is not enough.
+      // alert("Warning: Your configuration might be too large to save automatically.");
     }
   }
 
@@ -856,7 +857,7 @@
       return;
     }
 
-    // Use compressor for sector images too
+    // Use compressor for sector images
     processImage(file, 200, 0.8).then(dataUrl => {
         const img = new Image();
         img.onload = () => {
@@ -866,6 +867,14 @@
             drawWheel(currentRotation);
             saveLocalState();
         };
+        img.onerror = () => {
+             alert(`Failed to load sector image ${index + 1}. Please try a different file.`);
+             seg.imageDataUrl = null;
+             seg.imageObj = null;
+             if (preview) preview.style.backgroundImage = "none";
+             drawWheel(currentRotation);
+             saveLocalState();
+        }
         img.src = dataUrl;
     }).catch(err => {
         console.error(err);
@@ -1247,6 +1256,13 @@
           drawWheel(currentRotation);
           saveLocalState();
         };
+        img.onerror = () => {
+             alert("Failed to load logo after processing. Please try a different file.");
+             logoDataUrl = null;
+             logoImg = null;
+             drawWheel(currentRotation);
+             saveLocalState();
+        }
         img.src = logoDataUrl;
     }).catch(err => {
         console.error(err);
@@ -1354,7 +1370,10 @@
     ensureSliceAngle();
     renderSectorsPanel();
 
-    // Check if background exists
+    let stateWasCleaned = false;
+    const imageLoadPromises = [];
+
+    // 1. Background (Synchronous CSS application)
     if (typeof data.backgroundDataUrl === "string" && data.backgroundDataUrl.startsWith("data:")) {
       bgDataUrl = data.backgroundDataUrl;
       appEl.style.backgroundImage = `url(${bgDataUrl})`;
@@ -1363,54 +1382,78 @@
       appEl.style.backgroundImage = "";
     }
 
-    // Check if logo exists
+    // 2. Logo (Async with Promise for definitive state check)
     if (typeof data.logoDataUrl === "string" && data.logoDataUrl.startsWith("data:")) {
-      logoDataUrl = data.logoDataUrl;
-      const img = new Image();
-      img.onload = () => {
-        logoImg = img;
-        drawWheel(currentRotation);
-      };
-      img.src = logoDataUrl;
+        logoDataUrl = data.logoDataUrl;
+        imageLoadPromises.push(new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                logoImg = img;
+                resolve();
+            };
+            img.onerror = () => {
+                console.warn("Failed to load saved logo image. Clearing DataURL.");
+                logoDataUrl = null; 
+                logoImg = null;
+                stateWasCleaned = true;
+                resolve(); // Resolve even on error so Promise.all can continue
+            }
+            img.src = logoDataUrl;
+        }));
     } else {
       logoDataUrl = null;
       logoImg = null;
-      drawWheel(currentRotation);
     }
 
-    // Load segment images
+    // 3. Segment Images (Async with Promises for definitive state check)
     segments.forEach((s) => {
       if (s.imageDataUrl) {
-        const img = new Image();
-        img.onload = () => {
-          s.imageObj = img;
-          drawWheel(currentRotation);
-        };
-        img.src = s.imageDataUrl;
+        imageLoadPromises.push(new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                s.imageObj = img;
+                resolve();
+            };
+            img.onerror = () => {
+                console.warn(`Failed to load saved image for sector: ${s.label}. Clearing DataURL.`);
+                s.imageDataUrl = null;
+                s.imageObj = null;
+                stateWasCleaned = true;
+                resolve(); // Resolve even on error
+            };
+            img.src = s.imageDataUrl;
+        }));
       }
     });
 
+    // Wait for all image loading attempts
+    Promise.all(imageLoadPromises).then(() => {
+        drawWheel(currentRotation);
+        if (stateWasCleaned) {
+            console.log("One or more images failed to load, saving clean state to localStorage.");
+            // Only save if we had to clean up a corrupted DataURL
+            saveLocalState();
+        }
+    });
+
+    // Initial draw of the wheel while images load (will draw without images if they are still loading)
     drawWheel(currentRotation);
   }
 
-  // ===== Fullscreen =====
-  fullscreenBtn.addEventListener("click", () => {
-    if (!document.fullscreenElement) {
-      settingsPanel.classList.add("hidden");
-      if (appEl.requestFullscreen) appEl.requestFullscreen();
-    } else {
-      if (document.exitFullscreen) document.exitFullscreen();
-    }
-  });
-
-  document.addEventListener("fullscreenchange", () => {
-    if (!document.fullscreenElement) {
-      settingsPanel.classList.remove("hidden");
-      fullscreenBtn.textContent = "Fullscreen";
-    } else {
-      fullscreenBtn.textContent = "Exit fullscreen";
-    }
-  });
+  function loadDefault() {
+      segments = defaultSegmentsData.map((s, i) => ({
+      label: s.label,
+      url: s.url,
+      color: s.color || colorPalette[i % colorPalette.length],
+      imageDataUrl: null,
+      imageObj: null,
+      linkEnabled: true,
+      collapsed: false
+    }));
+    setWheelZoom(1);
+    ensureSliceAngle();
+    renderSectorsPanel();
+  }
 
   // ===== Init =====
   async function init() {
@@ -1439,23 +1482,7 @@
     drawWheel(currentRotation);
   }
 
-  function loadDefault() {
-      segments = defaultSegmentsData.map((s, i) => ({
-      label: s.label,
-      url: s.url,
-      color: s.color || colorPalette[i % colorPalette.length],
-      imageDataUrl: null,
-      imageObj: null,
-      linkEnabled: true,
-      collapsed: false
-    }));
-    setWheelZoom(1);
-    ensureSliceAngle();
-    renderSectorsPanel();
-  }
-
   init();
 </script>
 </body>
 </html>
-
