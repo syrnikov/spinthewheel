@@ -844,64 +844,6 @@
       if (urlInput) urlInput.disabled = !seg.linkEnabled;
       drawWheel(currentRotation);
       saveLocalState();
-      return;
-    }
-
-    if (!target.classList.contains("sector-image")) return;
-
-    const preview = card.querySelector(".sector-image-preview");
-
-    const file = target.files[0];
-    if (!file) {
-      seg.imageDataUrl = null;
-      seg.imageObj = null;
-      if (preview) preview.style.backgroundImage = "none";
-      drawWheel(currentRotation);
-      saveLocalState();
-      return;
-    }
-
-    // Use compressor for sector images
-    processImage(file, 200, 0.8).then(dataUrl => {
-        const img = new Image();
-        img.onload = () => {
-            seg.imageDataUrl = dataUrl;
-            seg.imageObj = img;
-            if (preview) preview.style.backgroundImage = `url(${dataUrl})`;
-            drawWheel(currentRotation);
-            saveLocalState();
-        };
-        img.onerror = () => {
-             alert(`Failed to load sector image ${index + 1}. Please try a different file.`);
-             seg.imageDataUrl = null;
-             seg.imageObj = null;
-             if (preview) preview.style.backgroundImage = "none";
-             drawWheel(currentRotation);
-             saveLocalState();
-        }
-        img.src = dataUrl;
-    }).catch(err => {
-        console.error(err);
-        alert("Failed to process image.");
-    });
-  });
-
-  sectorsContainer.addEventListener("click", (e) => {
-    const target = e.target;
-    if (target.classList.contains("sector-delete") && !target.disabled) {
-      const card = target.closest(".sector-card");
-      if (!card) return;
-      const index = parseInt(card.dataset.index, 10);
-      removeSector(index);
-    } else if (target.classList.contains("collapse-toggle")) {
-      const card = target.closest(".sector-card");
-      if (!card) return;
-      const index = parseInt(card.dataset.index, 10);
-      const seg = segments[index];
-      if (!seg) return;
-      seg.collapsed = !seg.collapsed;
-      renderSectorsPanel();
-      saveLocalState();
     }
   });
 
@@ -1007,7 +949,7 @@
 
   // ===== Fullscreen =====
   function toggleFullscreen() {
-    const elem = document.documentElement; // or appEl if you want only the app
+    const elem = document.documentElement;
     if (!document.fullscreenElement) {
       if (elem.requestFullscreen) elem.requestFullscreen();
       else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
@@ -1027,8 +969,10 @@
     if (!fullscreenBtn) return;
     if (document.fullscreenElement) {
       fullscreenBtn.textContent = "Exit fullscreen";
+      settingsPanel.style.display = "none";
     } else {
       fullscreenBtn.textContent = "Fullscreen";
+      settingsPanel.style.display = "flex";
     }
   });
 
@@ -1511,6 +1455,43 @@
       loadDefault();
     }
 
+    // 2. Load preset background image
+    try {
+      const bgResponse = await fetch('bg.png');
+      if (bgResponse.ok) {
+        const bgBlob = await bgResponse.blob();
+        const reader = new FileReader();
+        reader.onload = () => {
+          bgDataUrl = reader.result;
+          appEl.style.backgroundImage = `url(${bgDataUrl})`;
+        };
+        reader.readAsDataURL(bgBlob);
+      }
+    } catch(e) {
+      console.log("No bg.png found in root, using default background");
+    }
+
+    // 3. Load preset logo image
+    try {
+      const logoResponse = await fetch('logo.png');
+      if (logoResponse.ok) {
+        const logoBlob = await logoResponse.blob();
+        const reader = new FileReader();
+        reader.onload = () => {
+          logoDataUrl = reader.result;
+          const img = new Image();
+          img.onload = () => {
+            logoImg = img;
+            drawWheel(currentRotation);
+          };
+          img.src = logoDataUrl;
+        };
+        reader.readAsDataURL(logoBlob);
+      }
+    } catch(e) {
+      console.log("No logo.png found in root, wheel will have no center logo");
+    }
+
     try {
       if (document.fonts && document.fonts.load) {
         await document.fonts.load(FONT_SPEC);
@@ -1524,3 +1505,61 @@
 </script>
 </body>
 </html>
+      return;
+    }
+
+    if (!target.classList.contains("sector-image")) return;
+
+    const preview = card.querySelector(".sector-image-preview");
+
+    const file = target.files[0];
+    if (!file) {
+      seg.imageDataUrl = null;
+      seg.imageObj = null;
+      if (preview) preview.style.backgroundImage = "none";
+      drawWheel(currentRotation);
+      saveLocalState();
+      return;
+    }
+
+    // Use compressor for sector images
+    processImage(file, 200, 0.8).then(dataUrl => {
+        const img = new Image();
+        img.onload = () => {
+            seg.imageDataUrl = dataUrl;
+            seg.imageObj = img;
+            if (preview) preview.style.backgroundImage = `url(${dataUrl})`;
+            drawWheel(currentRotation);
+            saveLocalState();
+        };
+        img.onerror = () => {
+             alert(`Failed to load sector image ${index + 1}. Please try a different file.`);
+             seg.imageDataUrl = null;
+             seg.imageObj = null;
+             if (preview) preview.style.backgroundImage = "none";
+             drawWheel(currentRotation);
+             saveLocalState();
+        }
+        img.src = dataUrl;
+    }).catch(err => {
+        console.error(err);
+        alert("Failed to process image.");
+    });
+  });
+
+  sectorsContainer.addEventListener("click", (e) => {
+    const target = e.target;
+    if (target.classList.contains("sector-delete") && !target.disabled) {
+      const card = target.closest(".sector-card");
+      if (!card) return;
+      const index = parseInt(card.dataset.index, 10);
+      removeSector(index);
+    } else if (target.classList.contains("collapse-toggle")) {
+      const card = target.closest(".sector-card");
+      if (!card) return;
+      const index = parseInt(card.dataset.index, 10);
+      const seg = segments[index];
+      if (!seg) return;
+      seg.collapsed = !seg.collapsed;
+      renderSectorsPanel();
+      saveLocalState();
