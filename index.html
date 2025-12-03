@@ -71,7 +71,6 @@
       display: block;
     }
 
-
     #wheelCanvas {
       position: relative;
       z-index: 1;
@@ -92,7 +91,6 @@
       position: absolute;
       top: 50%;
       right: -6px; /* close to wheel */
-    
       width: 0;
       height: 0;
       border-top: 18px solid transparent;
@@ -692,15 +690,21 @@
       showImages,
       wheelZoom,
       logoDataUrl,
-      bgDataUrl
+      bgDataUrl,
+      // alias for loader + exported configs
+      backgroundDataUrl: bgDataUrl || null
     };
 
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
-      console.warn("Storage full. Could not save state. Data size:", JSON.stringify(state).length / 1024 / 1024, "MB", e);
-      // We will only alert if image processing is not enough.
-      // alert("Warning: Your configuration might be too large to save automatically.");
+      console.warn(
+        "Storage full. Could not save state. Data size:",
+        JSON.stringify(state).length / 1024 / 1024,
+        "MB",
+        e
+      );
+      // alert removed on purpose – too annoying if it triggers often
     }
   }
 
@@ -999,6 +1003,33 @@
       const delta = parseFloat(btn.dataset.delta || "0");
       setWheelZoom(wheelZoom + delta);
     });
+  });
+
+  // ===== Fullscreen =====
+  function toggleFullscreen() {
+    const elem = document.documentElement; // or appEl if you want only the app
+    if (!document.fullscreenElement) {
+      if (elem.requestFullscreen) elem.requestFullscreen();
+      else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+      else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      else if (document.msExitFullscreen) document.msExitFullscreen();
+    }
+  }
+
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener("click", toggleFullscreen);
+  }
+
+  document.addEventListener("fullscreenchange", () => {
+    if (!fullscreenBtn) return;
+    if (document.fullscreenElement) {
+      fullscreenBtn.textContent = "Exit fullscreen";
+    } else {
+      fullscreenBtn.textContent = "Fullscreen";
+    }
   });
 
   // ===== Modal =====
@@ -1354,7 +1385,7 @@
         imageDataUrl: s.imageDataUrl || null,
         imageObj: null,
         linkEnabled: s.linkEnabled !== false,
-        collapsed: s.collapsed || false
+        collapsed: !!s.collapsed
       }));
     }
 
@@ -1373,9 +1404,16 @@
     let stateWasCleaned = false;
     const imageLoadPromises = [];
 
-    // 1. Background (Synchronous CSS application)
+    // 1. Background (Synchronous CSS application, supports old + new keys)
+    let backgroundData = null;
     if (typeof data.backgroundDataUrl === "string" && data.backgroundDataUrl.startsWith("data:")) {
-      bgDataUrl = data.backgroundDataUrl;
+      backgroundData = data.backgroundDataUrl;
+    } else if (typeof data.bgDataUrl === "string" && data.bgDataUrl.startsWith("data:")) {
+      backgroundData = data.bgDataUrl;
+    }
+
+    if (backgroundData) {
+      bgDataUrl = backgroundData;
       appEl.style.backgroundImage = `url(${bgDataUrl})`;
     } else {
       bgDataUrl = null;
@@ -1436,7 +1474,7 @@
         }
     });
 
-    // Initial draw of the wheel while images load (will draw without images if they are still loading)
+    // Initial draw of the wheel while images load
     drawWheel(currentRotation);
   }
 
